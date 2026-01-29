@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Json
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  passwordHash   String
+  name           String
+  isActive       Boolean          @default(true)
+  commissionRate Decimal          @default(0.2) // staff revenue share (0-1)
+  roleId         String
+  role           Role             @relation(fields: [roleId], references: [id])
+  repairs        Repair[]         @relation("RepairAssignedTo")
+  inventoryUsages InventoryUsage[] @relation("InventoryUsageCreatedBy")
+  repairCharges  RepairCharge[]   @relation("RepairChargeCreatedBy")
+  payments       Payment[]         @relation("PaymentReceivedBy")
+  auditLogs      AuditLog[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  devices   Device[]
+  repairs   Repair[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeviceCategory {
+  id        String            @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    DeviceCategory?   @relation("DeviceCategoryToParent", fields: [parentId], references: [id])
+  children  DeviceCategory[]  @relation("DeviceCategoryToParent")
+  devices   Device[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model Device {
+  id              String          @id @default(cuid())
+  customerId      String
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  categoryId      String?
+  category        DeviceCategory? @relation(fields: [categoryId], references: [id])
+  brand           String?
+  model           String?
+  serialNumber    String?
+  description     String?
+  repairs         Repair[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+enum RepairStatus {
+  INTAKE
+  TO_REPAIR
+  IN_REPAIR
+  REPAIRED
+  UNREPAIRABLE
+  DELIVERED
+}
+
+model Repair {
+  id                String           @id @default(cuid())
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  deviceId          String
+  device            Device           @relation(fields: [deviceId], references: [id])
+  assignedToUserId  String?
+  assignedTo        User?            @relation("RepairAssignedTo", fields: [assignedToUserId], references: [id])
+  status            RepairStatus     @default(INTAKE)
+  qrToken           String           @unique
+  intakeNotes       String?
+  flatChargeAmount  Decimal          @default(0)
+  totalCharges      Decimal          @default(0)
+  staffShareAmount  Decimal          @default(0)
+  shopShareAmount   Decimal          @default(0)
+  isLocked          Boolean          @default(false)
+  intakeAt          DateTime         @default(now())
+  toRepairAt        DateTime?
+  inRepairAt        DateTime?
+  completedAt       DateTime?
+  deliveredAt       DateTime?
+  charges           RepairCharge[]
+  inventoryUsage    InventoryUsage[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model Inventory {
+  id          String           @id @default(cuid())
+  name        String
+  sku         String?          @unique
+  quantity    Int              @default(0)
+  unitPrice   Decimal          @default(0)
+  isActive    Boolean          @default(true)
+  usages      InventoryUsage[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model InventoryUsage {
+  id                    String          @id @default(cuid())
+  repairId              String
+  repair                Repair           @relation(fields: [repairId], references: [id])
+  inventoryId           String
+  inventory             Inventory        @relation(fields: [inventoryId], references: [id])
+  quantityUsed          Int
+  unitPriceAtUse        Decimal
+  createdByUserId       String
+  createdBy             User            @relation("InventoryUsageCreatedBy", fields: [createdByUserId], references: [id])
+  sourceRepairCharges   RepairCharge[]
+  createdAt             DateTime         @default(now())
+}
+
+enum RepairChargeType {
+  INVENTORY
+  FLAT
+  DISCOUNT
+  OTHER
+}
+
+model RepairCharge {
+  id                     String           @id @default(cuid())
+  repairId               String
+  repair                 Repair           @relation(fields: [repairId], references: [id])
+  type                   RepairChargeType
+  description            String
+  amount                 Decimal
+  sourceInventoryUsageId String?
+  sourceInventoryUsage   InventoryUsage?  @relation(fields: [sourceInventoryUsageId], references: [id])
+  createdByUserId        String
+  createdBy              User             @relation("RepairChargeCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt              DateTime         @default(now())
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  repairId         String
+  repair           Repair        @relation(fields: [repairId], references: [id])
+  amount           Decimal
+  method           PaymentMethod
+  receivedByUserId String
+  receivedBy       User          @relation("PaymentReceivedBy", fields: [receivedByUserId], references: [id])
+  receivedAt       DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  repairId  String?
+  repair    Repair?  @relation(fields: [repairId], references: [id])
+  entityType String
+  entityId   String
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
