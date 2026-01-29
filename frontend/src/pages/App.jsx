@@ -11,6 +11,7 @@ import QrScanPage from "./QrScanPage.jsx";
 import InventoryPage from "./InventoryPage.jsx";
 import RepairWorkspacePage from "./RepairWorkspacePage.jsx";
 import BillingPage from "./BillingPage.jsx";
+import UsersPage from "./UsersPage.jsx";
 import { PERMISSIONS } from "../constants/permissions.js";
 
 const App = () => {
@@ -60,6 +61,7 @@ const App = () => {
               PERMISSIONS.UPDATE_REPAIR_STATUS,
               PERMISSIONS.MANAGE_BILLING,
             ]}
+            requireAll={false}
           >
             <Layout>
               <QrScanPage />
@@ -78,6 +80,16 @@ const App = () => {
         }
       />
       <Route
+        path="/users"
+        element={
+          <ProtectedRoute requiredPermissions={[PERMISSIONS.MANAGE_USERS]}>
+            <Layout>
+              <UsersPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/repairs/:id"
         element={
           <ProtectedRoute
@@ -85,6 +97,7 @@ const App = () => {
               PERMISSIONS.UPDATE_REPAIR_STATUS,
               PERMISSIONS.MANAGE_BILLING,
             ]}
+            requireAll={false}
           >
             <Layout>
               <RepairWorkspacePage />
@@ -100,6 +113,7 @@ const App = () => {
               PERMISSIONS.MANAGE_BILLING,
               PERMISSIONS.TAKE_PAYMENT,
             ]}
+            requireAll={false}
           >
             <Layout>
               <BillingPage />

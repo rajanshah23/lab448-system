@@ -1,5 +1,6 @@
 import express from "express";
-import { prisma } from "../prisma.js";
+import { Op } from "sequelize";
+import db, { sequelize } from "../db.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { PERMISSIONS } from "../config.js";
 
@@ -15,25 +16,22 @@ router.get(
       const [
         totalRepairs,
         openRepairs,
-        totalRevenueAgg,
-        todayRevenueAgg,
+        totalRevenueResult,
+        todayRevenueResult,
       ] = await Promise.all([
-        prisma.repair.count(),
-        prisma.repair.count({
+        db.Repair.count(),
+        db.Repair.count({
           where: {
             status: {
-              in: ["INTAKE", "TO_REPAIR", "IN_REPAIR"],
+              [Op.in]: ["INTAKE", "TO_REPAIR", "IN_REPAIR"],
             },
           },
         }),
-        prisma.repair.aggregate({
-          _sum: { totalCharges: true },
-        }),
-        prisma.payment.aggregate({
-          _sum: { amount: true },
+        db.Repair.sum("totalCharges"),
+        db.Payment.sum("amount", {
           where: {
             receivedAt: {
-              gte: new Date(new Date().setHours(0, 0, 0, 0)),
+              [Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)),
             },
           },
         }),
@@ -42,8 +40,8 @@ router.get(
       res.json({
         totalRepairs,
         openRepairs,
-        totalRevenue: Number(totalRevenueAgg._sum.totalCharges || 0),
-        todayRevenue: Number(todayRevenueAgg._sum.amount || 0),
+        totalRevenue: Number(totalRevenueResult || 0),
+        todayRevenue: Number(todayRevenueResult || 0),
       });
     } catch (err) {
       console.error("Dashboard error", err);

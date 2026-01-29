@@ -1,5 +1,5 @@
 import express from "express";
-import { prisma } from "../prisma.js";
+import db from "../db.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { PERMISSIONS } from "../config.js";
 import { logAudit } from "../middleware/audit.js";
@@ -10,8 +10,8 @@ router.use(authenticate);
 
 router.get("/", authorize([PERMISSIONS.MANAGE_INVENTORY]), async (req, res) => {
   try {
-    const items = await prisma.inventory.findMany({
-      orderBy: { name: "asc" },
+    const items = await db.Inventory.findAll({
+      order: [["name", "ASC"]],
     });
     res.json(items);
   } catch (err) {
@@ -33,14 +33,12 @@ router.post(
     }
 
     try {
-      const item = await prisma.inventory.create({
-        data: {
-          name,
-          sku,
-          quantity,
-          unitPrice,
-          isActive,
-        },
+      const item = await db.Inventory.create({
+        name,
+        sku,
+        quantity,
+        unitPrice,
+        isActive,
       });
 
       await logAudit({
@@ -71,31 +69,30 @@ router.put(
     }
 
     try {
-      const existing = await prisma.inventory.findUnique({ where: { id } });
+      const existing = await db.Inventory.findByPk(id);
       if (!existing) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
 
-      const item = await prisma.inventory.update({
-        where: { id },
-        data: {
-          name: name ?? existing.name,
-          sku: sku ?? existing.sku,
-          quantity: quantity ?? existing.quantity,
-          unitPrice: unitPrice ?? existing.unitPrice,
-          isActive: isActive ?? existing.isActive,
-        },
-      });
+      const updateData = {
+        name: name ?? existing.name,
+        sku: sku ?? existing.sku,
+        quantity: quantity ?? existing.quantity,
+        unitPrice: unitPrice ?? existing.unitPrice,
+        isActive: isActive ?? existing.isActive,
+      };
+
+      await existing.update(updateData);
 
       await logAudit({
         userId: req.user.id,
         entityType: "Inventory",
         entityId: id,
         action: "INVENTORY_UPDATED",
-        metadata: { before: existing, after: item },
+        metadata: { before: existing.toJSON(), after: updateData },
       });
 
-      res.json(item);
+      res.json(existing);
     } catch (err) {
       console.error("Inventory update error", err);
       res.status(500).json({ message: "Internal server error" });

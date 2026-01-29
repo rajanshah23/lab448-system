@@ -25,20 +25,23 @@ export const Layout = ({ children }) => {
         </div>
         <nav className="nav">
           {hasPermission(PERMISSIONS.VIEW_DASHBOARD) && (
-            <NavLink to="/" label="Dashboard" />
+            <NavLink to="/" label="📊 Dashboard" />
           )}
           {hasPermission(PERMISSIONS.INTAKE_REPAIR) && (
-            <NavLink to="/intake" label="Intake" />
+            <NavLink to="/intake" label="📥 Intake" />
           )}
           {hasPermission(PERMISSIONS.UPDATE_REPAIR_STATUS) && (
-            <NavLink to="/queue" label="To-Repair Queue" />
+            <NavLink to="/queue" label="🔧 To-Repair Queue" />
           )}
           {(hasPermission(PERMISSIONS.UPDATE_REPAIR_STATUS) ||
             hasPermission(PERMISSIONS.MANAGE_BILLING)) && (
-            <NavLink to="/qr-scan" label="QR Scan" />
-          )}
+              <NavLink to="/qr-scan" label="📷 QR Scan" />
+            )}
           {hasPermission(PERMISSIONS.MANAGE_INVENTORY) && (
-            <NavLink to="/inventory" label="Inventory" />
+            <NavLink to="/inventory" label="📦 Inventory" />
+          )}
+          {hasPermission(PERMISSIONS.MANAGE_USERS) && (
+            <NavLink to="/users" label="👥 Users" />
           )}
         </nav>
 
@@ -50,7 +53,7 @@ export const Layout = ({ children }) => {
               <div className="muted capitalize">{user.roleName || "Role"}</div>
             </>
           )}
-          <div style={{marginTop:10}}>
+          <div style={{ marginTop: 10 }}>
             <button onClick={logout} className="btn btn-ghost">Sign out</button>
           </div>
         </div>

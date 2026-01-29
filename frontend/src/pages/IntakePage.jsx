@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { api } from "../utils/apiClient.js";
-import { REPAIR_STATUS } from "../constants/statuses.js";
 
 const IntakePage = () => {
   const [form, setForm] = useState({
@@ -44,198 +43,246 @@ const IntakePage = () => {
         flatChargeAmount: Number(form.flatChargeAmount || 0),
       });
       setResult(res.data);
+      setForm({
+        customerName: "",
+        customerPhone: "",
+        customerEmail: "",
+        deviceBrand: "",
+        deviceModel: "",
+        serialNumber: "",
+        description: "",
+        intakeNotes: "",
+        flatChargeAmount: 0,
+      });
     } catch (err) {
-      const serverMessage = err.response?.data?.message;
-      const serverCode = err.response?.data?.code;
-      const status = err.response?.status;
-      setError(
-        serverMessage
-          ? `${serverMessage}${serverCode ? ` (code: ${serverCode})` : ""}`
-          : err.message || `Intake failed${status ? ` (status ${status})` : ""}`
-      );
+      setError(err.response?.data?.message || "Intake failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-white">New Repair Intake</h2>
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900 border border-slate-800 rounded-xl p-6"
-      >
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-slate-200">
-            Customer Details
-          </h3>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              Name *
-            </label>
-            <input
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-              value={form.customerName}
-              onChange={update("customerName")}
-              required
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Phone
-              </label>
-              <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-                value={form.customerPhone}
-                onChange={update("customerPhone")}
-              />
+    <div className="content">
+      <div style={{ marginBottom: "8px" }}>
+        <h2 style={{ margin: 0, fontSize: "26px", fontWeight: 700 }}>
+          📥 New Repair Intake
+        </h2>
+        <p className="muted small" style={{ marginTop: "4px" }}>
+          Register a new device for repair
+        </p>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: "12px 16px",
+            background: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "10px",
+            color: "#f87171",
+            fontSize: "14px",
+          }}
+        >
+          ✗ {error}
+        </div>
+      )}
+
+      {result && (
+        <div
+          style={{
+            padding: "16px 20px",
+            background: "linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.15))",
+            border: "1px solid rgba(34, 197, 94, 0.3)",
+            borderRadius: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+            <div style={{ fontSize: "32px" }}>✓</div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 600, color: "#4ade80" }}>
+                Intake Created Successfully!
+              </h3>
+              <p className="small" style={{ marginBottom: "12px", color: "var(--text)" }}>
+                Device registered for {result.customer.name}
+              </p>
+              <div
+                style={{
+                  background: "rgba(0, 0, 0, 0.2)",
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  marginTop: "12px",
+                }}
+              >
+                <div className="small muted" style={{ marginBottom: "4px" }}>
+                  QR Token:
+                </div>
+                <div
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    letterSpacing: "2px",
+                    color: "#fff",
+                  }}
+                >
+                  {result.repair.qrToken}
+                </div>
+                <p className="small muted" style={{ marginTop: "8px" }}>
+                  Attach this QR code to the device for tracking
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Email
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div>
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 600 }}>
+              👤 Customer Information
+            </h3>
+            <div className="row">
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Full Name *
+                </label>
+                <input
+                  style={{ width: "100%" }}
+                  value={form.customerName}
+                  onChange={update("customerName")}
+                  placeholder="John Doe"
+                  required
+                />
+              </div>
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  style={{ width: "100%" }}
+                  value={form.customerPhone}
+                  onChange={update("customerPhone")}
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: "12px" }}>
+              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                Email Address
               </label>
               <input
                 type="email"
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
+                style={{ width: "100%" }}
                 value={form.customerEmail}
                 onChange={update("customerEmail")}
+                placeholder="customer@email.com"
               />
             </div>
           </div>
-        </div>
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-slate-200">
-            Device & Intake
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Brand
+
+          <div>
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 600 }}>
+              📱 Device Details
+            </h3>
+            <div className="row">
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Brand
+                </label>
+                <input
+                  style={{ width: "100%" }}
+                  value={form.deviceBrand}
+                  onChange={update("deviceBrand")}
+                  placeholder="Apple, Samsung, etc."
+                />
+              </div>
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Model
+                </label>
+                <input
+                  style={{ width: "100%" }}
+                  value={form.deviceModel}
+                  onChange={update("deviceModel")}
+                  placeholder="iPhone 14, Galaxy S23, etc."
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: "12px" }}>
+              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                Serial Number / IMEI
               </label>
               <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-                value={form.deviceBrand}
-                onChange={update("deviceBrand")}
+                style={{ width: "100%" }}
+                value={form.serialNumber}
+                onChange={update("serialNumber")}
+                placeholder="Device serial or IMEI number"
               />
             </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Model
-              </label>
-              <input
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-                value={form.deviceModel}
-                onChange={update("deviceModel")}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              Serial / IMEI
-            </label>
-            <input
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-              value={form.serialNumber}
-              onChange={update("serialNumber")}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              Issue description
-            </label>
-            <textarea
-              rows={3}
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-              value={form.description}
-              onChange={update("description")}
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Intake notes
+            <div style={{ marginTop: "12px" }}>
+              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                Issue Description
               </label>
               <textarea
-                rows={2}
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-                value={form.intakeNotes}
-                onChange={update("intakeNotes")}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Flat charge (₹)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100"
-                value={form.flatChargeAmount}
-                onChange={update("flatChargeAmount")}
+                rows={3}
+                style={{ width: "100%", resize: "vertical" }}
+                value={form.description}
+                onChange={update("description")}
+                placeholder="Describe the issue (e.g., Screen cracked, Won't turn on, Battery draining fast)"
               />
             </div>
           </div>
-        </div>
-        {error && (
-          <div className="md:col-span-2 text-sm text-red-400 bg-red-950/40 border border-red-800 rounded-md px-3 py-2">
-            {error}
-          </div>
-        )}
-        <div className="md:col-span-2 flex justify-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium text-white px-4 py-2"
-          >
-            {loading ? "Saving..." : "Create Intake"}
-          </button>
-        </div>
-      </form>
 
-      {result && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
-          <h3 className="text-sm font-semibold text-slate-200">
-            Intake created
-          </h3>
-          <p className="text-sm text-slate-300">
-            QR token for this repair:
-          </p>
-              <div className="text-lg font-mono bg-slate-950 border border-slate-800 rounded-md px-3 py-2 inline-block">
-                {result.repair.qrToken}
+          <div>
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 600 }}>
+              📋 Intake Notes & Charges
+            </h3>
+            <div className="row">
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Internal Notes
+                </label>
+                <textarea
+                  rows={2}
+                  style={{ width: "100%", resize: "vertical" }}
+                  value={form.intakeNotes}
+                  onChange={update("intakeNotes")}
+                  placeholder="Any internal notes for the technician"
+                />
               </div>
-              <div className="mt-2">
-                <span className="text-sm muted mr-2">Status:</span>
-                <span className="text-sm font-medium">{result.repair.status}</span>
+              <div className="col">
+                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                  Flat Charge Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  style={{ width: "100%" }}
+                  value={form.flatChargeAmount}
+                  onChange={update("flatChargeAmount")}
+                  placeholder="0.00"
+                />
               </div>
-              {result.repair.status === REPAIR_STATUS.INTAKE && (
-                <div className="mt-3">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await api.post(`/repairs/${result.repair.id}/transition`, { newStatus: REPAIR_STATUS.TO_REPAIR });
-                        // refresh small UI cue
-                        setResult((r) => ({ ...r, repair: { ...r.repair, status: REPAIR_STATUS.TO_REPAIR } }));
-                      } catch (e) {
-                        alert(e.response?.data?.message || "Failed to move to queue");
-                      }
-                    }}
-                    className="inline-flex items-center rounded-md bg-amber-600 hover:bg-amber-500 text-xs font-medium text-white px-3 py-1.5"
-                  >
-                    Move to Queue
-                  </button>
-                </div>
-              )}
-          <p className="text-xs text-slate-500">
-            Attach this QR to the device. It will be used for tracking and
-            billing.
-          </p>
-        </div>
-      )}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "8px" }}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary"
+              style={{ padding: "12px 24px", fontSize: "15px", fontWeight: 600 }}
+            >
+              {loading ? "Creating..." : "✓ Create Intake"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
 
 export default IntakePage;
-

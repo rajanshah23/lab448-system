@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config.js";
-import { prisma } from "../prisma.js";
+import db from "../db.js";
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -12,9 +12,8 @@ export const authenticate = async (req, res, next) => {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { role: true },
+    const user = await db.User.findByPk(payload.sub, {
+      include: [{ model: db.Role, as: "role" }],
     });
 
     if (!user || !user.isActive) {

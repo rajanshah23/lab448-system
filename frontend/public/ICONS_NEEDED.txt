@@ -1,0 +1,16 @@
+PWA Icon Requirements
+=====================
+
+The PWA manifest requires two icon files:
+
+1. icon-192.png (192x192 pixels)
+2. icon-512.png (512x512 pixels)
+
+These should be PNG format images with your app logo/icon.
+
+For now, you can:
+- Use any 192x192 and 512x512 PNG files with your logo
+- Or use an online tool to generate PWA icons from a single image
+- Recommended: Use a simple wrench/repair tool icon with "Lab448" text
+
+Place these files in the /frontend/public/ directory.

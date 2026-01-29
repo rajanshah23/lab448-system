@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "../prisma.js";
+import db from "../db.js";
 import { JWT_EXPIRES_IN, JWT_SECRET, PERMISSIONS } from "../config.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -20,9 +20,9 @@ router.post("/login", async (req, res) => {
   }
 
   try {
-    const user = await prisma.user.findUnique({
+    const user = await db.User.findOne({
       where: { email },
-      include: { role: true },
+      include: [{ model: db.Role, as: "role" }],
     });
 
     if (!user || !user.isActive) {
@@ -57,9 +57,8 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", authenticate, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: { role: true },
+    const user = await db.User.findByPk(req.user.id, {
+      include: [{ model: db.Role, as: "role" }],
     });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -88,32 +87,28 @@ router.post("/bootstrap-admin", async (req, res) => {
   }
 
   try {
-    let adminRole = await prisma.role.findFirst({
+    let adminRole = await db.Role.findOne({
       where: { name: "admin" },
     });
     if (!adminRole) {
-      adminRole = await prisma.role.create({
-        data: {
-          name: "admin",
-          description: "System administrator",
-          permissions: Object.values(PERMISSIONS),
-        },
+      adminRole = await db.Role.create({
+        name: "admin",
+        description: "System administrator",
+        permissions: Object.values(PERMISSIONS),
       });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await db.User.findOne({ where: { email } });
     if (existing) {
       return res.status(400).json({ message: "User already exists" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        name,
-        roleId: adminRole.id,
-      },
+    const user = await db.User.create({
+      email,
+      passwordHash,
+      name,
+      roleId: adminRole.id,
     });
 
     res.status(201).json({ id: user.id, email: user.email });

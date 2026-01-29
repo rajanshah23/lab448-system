@@ -2,10 +2,12 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { PORT } from "./config.js";
+import { sequelize } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import repairsRoutes from "./routes/repairs.js";
 import inventoryRoutes from "./routes/inventory.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import usersRoutes from "./routes/users.js";
 
 const app = express();
 
@@ -34,13 +36,24 @@ app.use("/api/auth", authRoutes);
 app.use("/api/repairs", repairsRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/users", usersRoutes);
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error", err);
   res.status(500).json({ message: "Unexpected error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Repair shop backend listening on port ${PORT}`);
-});
+// Test database connection and start server
+sequelize
+  .authenticate()
+  .then(() => {
+    console.log("✓ Database connection established");
+    app.listen(PORT, () => {
+      console.log(`✓ Repair shop backend listening on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("✗ Unable to connect to database:", err);
+    process.exit(1);
+  });
 

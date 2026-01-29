@@ -1,5 +1,6 @@
 import express from "express";
-import { prisma } from "../prisma.js";
+import { Op } from "sequelize";
+import db, { sequelize } from "../db.js";
 import {
   ALLOWED_STATUS_TRANSITIONS,
   PERMISSIONS,
@@ -14,20 +15,17 @@ const generateQrToken = () =>
   Math.random().toString(36).substring(2, 10) +
   Math.random().toString(36).substring(2, 10);
 
-const recalcRepairTotals = async (repairId, db = prisma) => {
-  // db can be a transaction client (tx) so callers inside a $transaction
-  // pass the tx to ensure the update sees uncommitted records.
-  const charges = await db.repairCharge.findMany({
+const recalcRepairTotals = async (repairId, transaction = null) => {
+  const charges = await db.RepairCharge.findAll({
     where: { repairId },
+    transaction,
   });
   const totalCharges = charges.reduce((sum, c) => sum + Number(c.amount), 0);
 
-  await db.repair.update({
-    where: { id: repairId },
-    data: {
-      totalCharges,
-    },
-  });
+  await db.Repair.update(
+    { totalCharges },
+    { where: { id: repairId }, transaction }
+  );
 };
 
 router.use(authenticate);
@@ -44,28 +42,29 @@ router.post(
     }
 
     try {
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await sequelize.transaction(async (t) => {
         let customerRecord;
 
         if (customer.id) {
-          customerRecord = await tx.customer.findUnique({
-            where: { id: customer.id },
+          customerRecord = await db.Customer.findByPk(customer.id, {
+            transaction: t,
           });
         }
 
         if (!customerRecord) {
-          customerRecord = await tx.customer.create({
-            data: {
+          customerRecord = await db.Customer.create(
+            {
               name: customer.name,
               phone: customer.phone,
               email: customer.email,
               address: customer.address,
             },
-          });
+            { transaction: t }
+          );
         }
 
-        const deviceRecord = await tx.device.create({
-          data: {
+        const deviceRecord = await db.Device.create(
+          {
             customerId: customerRecord.id,
             categoryId: device?.categoryId || null,
             brand: device?.brand || null,
@@ -73,12 +72,13 @@ router.post(
             serialNumber: device?.serialNumber || null,
             description: device?.description || null,
           },
-        });
+          { transaction: t }
+        );
 
         const qrToken = generateQrToken();
 
-        const repair = await tx.repair.create({
-          data: {
+        const repair = await db.Repair.create(
+          {
             customerId: customerRecord.id,
             deviceId: deviceRecord.id,
             status: REPAIR_STATUS.INTAKE,
@@ -86,23 +86,23 @@ router.post(
             intakeNotes: intakeNotes || null,
             flatChargeAmount: flatChargeAmount || 0,
           },
-        });
+          { transaction: t }
+        );
 
         if (flatChargeAmount > 0) {
-          await tx.repairCharge.create({
-            data: {
+          await db.RepairCharge.create(
+            {
               repairId: repair.id,
               type: "FLAT",
               description: "Intake flat charge",
               amount: flatChargeAmount,
               createdByUserId: req.user.id,
             },
-          });
+            { transaction: t }
+          );
         }
 
-        // Recalculate using the transaction client so the newly-created
-        // repair and charges are visible to the update.
-        await recalcRepairTotals(repair.id, tx);
+        await recalcRepairTotals(repair.id, t);
 
         await logAudit(
           {
@@ -113,7 +113,7 @@ router.post(
             action: "INTAKE_CREATED",
             metadata: { intakeNotes, flatChargeAmount },
           },
-          tx
+          t
         );
 
         return { repair, customer: customerRecord, device: deviceRecord };
@@ -122,10 +122,7 @@ router.post(
       res.status(201).json(result);
     } catch (err) {
       console.error("Intake error", err);
-      // Surface the error message and code in dev to help debugging the client.
-      const payload = { message: err.message || "Internal server error" };
-      if (err.code) payload.code = err.code;
-      res.status(500).json(payload);
+      res.status(500).json({ message: "Internal server error" });
     }
   }
 );
@@ -143,7 +140,7 @@ router.post(
     }
 
     try {
-      const repair = await prisma.repair.findUnique({ where: { id } });
+      const repair = await db.Repair.findByPk(id);
       if (!repair) {
         return res.status(404).json({ message: "Repair not found" });
       }
@@ -158,23 +155,26 @@ router.post(
       const updateData = { status: newStatus };
       const now = new Date();
 
-      if (repair.status === REPAIR_STATUS.INTAKE && newStatus === REPAIR_STATUS.TO_REPAIR) {
-        updateData["toRepairAt"] = now;
+      if (
+        repair.status === REPAIR_STATUS.INTAKE &&
+        newStatus === REPAIR_STATUS.TO_REPAIR
+      ) {
+        updateData.toRepairAt = now;
       }
       if (newStatus === REPAIR_STATUS.IN_REPAIR) {
-        updateData["inRepairAt"] = now;
+        updateData.inRepairAt = now;
       }
-      if (newStatus === REPAIR_STATUS.REPAIRED || newStatus === REPAIR_STATUS.UNREPAIRABLE) {
-        updateData["completedAt"] = now;
+      if (
+        newStatus === REPAIR_STATUS.REPAIRED ||
+        newStatus === REPAIR_STATUS.UNREPAIRABLE
+      ) {
+        updateData.completedAt = now;
       }
       if (newStatus === REPAIR_STATUS.DELIVERED) {
-        updateData["deliveredAt"] = now;
+        updateData.deliveredAt = now;
       }
 
-      const updated = await prisma.repair.update({
-        where: { id },
-        data: updateData,
-      });
+      await repair.update(updateData);
 
       await logAudit({
         userId: req.user.id,
@@ -185,7 +185,7 @@ router.post(
         metadata: { from: repair.status, to: newStatus },
       });
 
-      res.json(updated);
+      res.json(repair);
     } catch (err) {
       console.error("Transition error", err);
       res.status(500).json({ message: "Internal server error" });
@@ -208,8 +208,8 @@ router.post(
     }
 
     try {
-      const result = await prisma.$transaction(async (tx) => {
-        const repair = await tx.repair.findUnique({ where: { id } });
+      const result = await sequelize.transaction(async (t) => {
+        const repair = await db.Repair.findByPk(id, { transaction: t });
         if (!repair) {
           throw new Error("REPAIR_NOT_FOUND");
         }
@@ -217,8 +217,8 @@ router.post(
           throw new Error("BILL_LOCKED");
         }
 
-        const inventory = await tx.inventory.findUnique({
-          where: { id: inventoryId },
+        const inventory = await db.Inventory.findByPk(inventoryId, {
+          transaction: t,
         });
         if (!inventory || !inventory.isActive) {
           throw new Error("INVENTORY_NOT_FOUND");
@@ -227,33 +227,28 @@ router.post(
           throw new Error("INSUFFICIENT_STOCK");
         }
 
-        const updatedInventory = await tx.inventory.update({
-          where: { id: inventoryId },
-          data: {
-            quantity: {
-              decrement: quantity,
-            },
-          },
-        });
+        await inventory.decrement("quantity", { by: quantity, transaction: t });
+        await inventory.reload({ transaction: t });
 
-        if (updatedInventory.quantity < 0) {
+        if (inventory.quantity < 0) {
           throw new Error("STOCK_WENT_NEGATIVE");
         }
 
-        const usage = await tx.inventoryUsage.create({
-          data: {
+        const usage = await db.InventoryUsage.create(
+          {
             repairId: id,
             inventoryId,
             quantityUsed: quantity,
             unitPriceAtUse: inventory.unitPrice,
             createdByUserId: req.user.id,
           },
-        });
+          { transaction: t }
+        );
 
         const chargeAmount = Number(inventory.unitPrice) * quantity;
 
-        const charge = await tx.repairCharge.create({
-          data: {
+        const charge = await db.RepairCharge.create(
+          {
             repairId: id,
             type: "INVENTORY",
             description: `${inventory.name} x${quantity}`,
@@ -261,11 +256,10 @@ router.post(
             sourceInventoryUsageId: usage.id,
             createdByUserId: req.user.id,
           },
-        });
+          { transaction: t }
+        );
 
-        // Use the transaction client so the update can see the usage and charge
-        // created earlier in this transaction.
-        await recalcRepairTotals(id, tx);
+        await recalcRepairTotals(id, t);
 
         await logAudit(
           {
@@ -276,7 +270,7 @@ router.post(
             action: "INVENTORY_USED",
             metadata: { inventoryId, quantity, chargeAmount },
           },
-          tx
+          t
         );
 
         return { usage, charge };
@@ -289,7 +283,9 @@ router.post(
         err.message === "REPAIR_NOT_FOUND" ||
         err.message === "INVENTORY_NOT_FOUND"
       ) {
-        return res.status(404).json({ message: "Repair or inventory not found" });
+        return res
+          .status(404)
+          .json({ message: "Repair or inventory not found" });
       }
       if (err.message === "BILL_LOCKED") {
         return res.status(400).json({ message: "Repair bill is locked" });
@@ -320,7 +316,7 @@ router.post(
     }
 
     try {
-      const repair = await prisma.repair.findUnique({ where: { id } });
+      const repair = await db.Repair.findByPk(id);
       if (!repair) {
         return res.status(404).json({ message: "Repair not found" });
       }
@@ -328,14 +324,12 @@ router.post(
         return res.status(400).json({ message: "Repair bill is locked" });
       }
 
-      const charge = await prisma.repairCharge.create({
-        data: {
-          repairId: id,
-          type,
-          description,
-          amount,
-          createdByUserId: req.user.id,
-        },
+      const charge = await db.RepairCharge.create({
+        repairId: id,
+        type,
+        description,
+        amount,
+        createdByUserId: req.user.id,
       });
 
       await recalcRepairTotals(id);
@@ -372,10 +366,10 @@ router.post(
     }
 
     try {
-      const result = await prisma.$transaction(async (tx) => {
-        const repair = await tx.repair.findUnique({
-          where: { id },
-          include: { payments: true },
+      const result = await sequelize.transaction(async (t) => {
+        const repair = await db.Repair.findByPk(id, {
+          include: [{ model: db.Payment, as: "payments" }],
+          transaction: t,
         });
         if (!repair) {
           throw new Error("REPAIR_NOT_FOUND");
@@ -390,14 +384,15 @@ router.post(
           throw new Error("OVERPAYMENT");
         }
 
-        const payment = await tx.payment.create({
-          data: {
+        const payment = await db.Payment.create(
+          {
             repairId: id,
             amount,
             method,
             receivedByUserId: req.user.id,
           },
-        });
+          { transaction: t }
+        );
 
         const newPaid = paidSoFar + amount;
         const shouldLock = newPaid >= total;
@@ -406,22 +401,20 @@ router.post(
         let shopShareAmount = repair.shopShareAmount;
 
         if (shouldLock) {
-          const staffRate = Number(
-            (await tx.user.findUnique({ where: { id: req.user.id } }))
-              .commissionRate
-          );
+          const user = await db.User.findByPk(req.user.id, { transaction: t });
+          const staffRate = Number(user.commissionRate);
           staffShareAmount = total * staffRate;
           shopShareAmount = total - staffShareAmount;
         }
 
-        const updatedRepair = await tx.repair.update({
-          where: { id },
-          data: {
+        await repair.update(
+          {
             isLocked: shouldLock,
             staffShareAmount,
             shopShareAmount,
           },
-        });
+          { transaction: t }
+        );
 
         await logAudit(
           {
@@ -432,10 +425,10 @@ router.post(
             action: "PAYMENT_RECEIVED",
             metadata: { amount, method, newPaid, total, locked: shouldLock },
           },
-          tx
+          t
         );
 
-        return { payment, repair: updatedRepair };
+        return { payment, repair };
       });
 
       res.status(201).json(result);
@@ -445,7 +438,9 @@ router.post(
         return res.status(404).json({ message: "Repair not found" });
       }
       if (err.message === "OVERPAYMENT") {
-        return res.status(400).json({ message: "Payment exceeds total due" });
+        return res
+          .status(400)
+          .json({ message: "Payment exceeds total due" });
       }
       res.status(500).json({ message: "Internal server error" });
     }
@@ -459,12 +454,11 @@ router.get(
   async (req, res) => {
     const { id } = req.params;
     try {
-      const repair = await prisma.repair.findUnique({
-        where: { id },
-        include: {
-          charges: true,
-          payments: true,
-        },
+      const repair = await db.Repair.findByPk(id, {
+        include: [
+          { model: db.RepairCharge, as: "charges" },
+          { model: db.Payment, as: "payments" },
+        ],
       });
       if (!repair) {
         return res.status(404).json({ message: "Repair not found" });
@@ -500,32 +494,33 @@ router.get(
   async (req, res) => {
     const { status } = req.query;
     if (!status) {
-      return res.status(400).json({ message: "Valid status query is required" });
+      return res
+        .status(400)
+        .json({ message: "Valid status query is required" });
     }
 
-    // Accept comma-separated statuses (e.g. "INTAKE,TO_REPAIR")
     const statusList = String(status)
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    // Validate statuses
     const validStatuses = Object.values(REPAIR_STATUS);
     const invalid = statusList.some((s) => !validStatuses.includes(s));
     if (invalid) {
-      return res.status(400).json({ message: "One or more invalid statuses" });
+      return res
+        .status(400)
+        .json({ message: "One or more invalid statuses" });
     }
 
     try {
-      const repairs = await prisma.repair.findMany({
-        where: { status: { in: statusList } },
-        orderBy: { createdAt: "asc" },
-        include: {
-          customer: true,
-          device: true,
-        },
+      const repairs = await db.Repair.findAll({
+        where: { status: { [Op.in]: statusList } },
+        include: [
+          { model: db.Customer, as: "customer" },
+          { model: db.Device, as: "device" },
+        ],
+        order: [["createdAt", "ASC"]],
       });
-      console.log(`Queue: requested statuses=${statusList.join(",")} -> found=${repairs.length}`);
       res.json(repairs);
     } catch (err) {
       console.error("Queue error", err);
@@ -541,9 +536,12 @@ router.get(
   async (req, res) => {
     const { token } = req.params;
     try {
-      const repair = await prisma.repair.findUnique({
+      const repair = await db.Repair.findOne({
         where: { qrToken: token },
-        include: { customer: true, device: true },
+        include: [
+          { model: db.Customer, as: "customer" },
+          { model: db.Device, as: "device" },
+        ],
       });
       if (!repair) {
         return res.status(404).json({ message: "Repair not found" });
@@ -560,17 +558,18 @@ router.get(
 router.get("/:id", authenticate, async (req, res) => {
   const { id } = req.params;
   try {
-    const repair = await prisma.repair.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        device: true,
-        charges: true,
-        payments: true,
-        inventoryUsage: {
-          include: { inventory: true },
+    const repair = await db.Repair.findByPk(id, {
+      include: [
+        { model: db.Customer, as: "customer" },
+        { model: db.Device, as: "device" },
+        { model: db.RepairCharge, as: "charges" },
+        { model: db.Payment, as: "payments" },
+        {
+          model: db.InventoryUsage,
+          as: "inventoryUsage",
+          include: [{ model: db.Inventory, as: "inventory" }],
         },
-      },
+      ],
     });
     if (!repair) {
       return res.status(404).json({ message: "Repair not found" });
@@ -583,4 +582,3 @@ router.get("/:id", authenticate, async (req, res) => {
 });
 
 export default router;
-
