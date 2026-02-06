@@ -47,6 +47,8 @@ const QueuePage = () => {
   const qrModalPrintRef = useRef(null);
   const navigate = useNavigate();
 
+
+
   const printQrContent = (ref) => {
     if (!ref?.current) return;
     const win = window.open("", "_blank");
@@ -137,17 +139,22 @@ const QueuePage = () => {
           display: "flex",
           alignItems: "center",
           gap: "12px",
+          justifyContent: "space-between",
         }}
       >
-        <div style={{ fontSize: "28px" }}>📋</div>
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-            {repairs.length} {repairs.length === 1 ? "Repair" : "Repairs"}
-          </div>
-          <div className="small muted">
-            Intake, to-repair, in-repair, repaired, unrepairable, delivered
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div style={{ fontSize: "28px" }}>📋</div>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+              {repairs.length} {repairs.length === 1 ? "Repair" : "Repairs"}
+            </div>
+            <div className="small muted">
+              Intake, to-repair, in-repair, repaired, unrepairable, delivered
+            </div>
           </div>
         </div>
+
+        <div style={{ minWidth: "200px" }} />
       </div>
 
       <div className="card">
@@ -361,6 +368,8 @@ const QueuePage = () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../utils/apiClient.js";
 import { useAuth } from "../state/AuthContext.jsx";
 import { ROLE_CODES, TECHNICIAN_LEVELS } from "../constants/permissions.js";
+import DarkSelect from "../components/DarkSelect.jsx";
 
 const UsersPage = () => {
   const { user: currentUser } = useAuth();
@@ -73,7 +74,9 @@ const UsersPage = () => {
   const selectedRole = roles.find((r) => r.id === form.roleId);
   const isTechnicianRole = selectedRole?.code === ROLE_CODES.TECHNICIAN;
 
-  const adminUsers = users.filter((u) => u.roleCode === ROLE_CODES.ADMIN && u.isActive);
+  const adminUsers = users.filter(
+    (u) => u.roleCode === ROLE_CODES.ADMIN && u.isActive,
+  );
   const isEditingSelf = editing && currentUser && editing === currentUser.id;
   const editingUser = editing ? users.find((u) => u.id === editing) : null;
   const isEditingLastAdmin =
@@ -97,7 +100,8 @@ const UsersPage = () => {
     if (isTechnicianRole) {
       payload.commissionRate = Number(form.commissionRate);
       if (form.technicianLevel) payload.technicianLevel = form.technicianLevel;
-      if (form.technicianLevelDisplay) payload.technicianLevelDisplay = form.technicianLevelDisplay;
+      if (form.technicianLevelDisplay)
+        payload.technicianLevelDisplay = form.technicianLevelDisplay;
     }
     try {
       if (editing) {
@@ -130,8 +134,7 @@ const UsersPage = () => {
   };
 
   const update = (field) => (e) => {
-    const value =
-      field === "isActive" ? e.target.checked : e.target.value;
+    const value = field === "isActive" ? e.target.checked : e.target.value;
     setForm((f) => ({ ...f, [field]: value }));
   };
 
@@ -180,10 +183,16 @@ const UsersPage = () => {
         <h3 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 600 }}>
           {editing ? "Edit User" : "Create New User"}
         </h3>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+        >
           <div className="row">
             <div className="col">
-              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+              <label
+                className="small muted"
+                style={{ display: "block", marginBottom: "6px" }}
+              >
                 Full Name *
               </label>
               <input
@@ -194,7 +203,10 @@ const UsersPage = () => {
               />
             </div>
             <div className="col">
-              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+              <label
+                className="small muted"
+                style={{ display: "block", marginBottom: "6px" }}
+              >
                 Email *
               </label>
               <input
@@ -209,7 +221,10 @@ const UsersPage = () => {
 
           <div className="row">
             <div className="col">
-              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+              <label
+                className="small muted"
+                style={{ display: "block", marginBottom: "6px" }}
+              >
                 Password {editing && "(leave blank to keep current)"}
               </label>
               <input
@@ -221,34 +236,36 @@ const UsersPage = () => {
               />
             </div>
             <div className="col">
-              <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
-                Role * {roleChangeDisabled && "(locked - must keep at least one admin)"}
-              </label>
-              <select
-                style={{
-                  width: "100%",
-                  opacity: roleChangeDisabled ? 0.7 : 1,
-                  cursor: roleChangeDisabled ? "not-allowed" : "pointer",
-                }}
-                value={form.roleId}
-                onChange={update("roleId")}
-                required
-                disabled={roleChangeDisabled}
+              <label
+                className="small muted"
+                style={{ display: "block", marginBottom: "6px" }}
               >
-                <option value="">Select role</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} {r.code && `(${r.code})`}
-                  </option>
-                ))}
-              </select>
+                Role *{" "}
+                {roleChangeDisabled &&
+                  "(locked - must keep at least one admin)"}
+              </label>
+              <DarkSelect
+                value={form.roleId}
+                onChange={(value) => setForm((f) => ({ ...f, roleId: value }))}
+                disabled={roleChangeDisabled}
+                options={[
+                  { value: "", label: "Select role" },
+                  ...roles.map((r) => ({
+                    value: r.id,
+                    label: r.code ? `${r.name} (${r.code})` : r.name,
+                  })),
+                ]}
+              />
             </div>
           </div>
 
           {isTechnicianRole && (
             <div className="row">
               <div className="col">
-                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                <label
+                  className="small muted"
+                  style={{ display: "block", marginBottom: "6px" }}
+                >
                   Commission Rate (0-1)
                 </label>
                 <input
@@ -262,33 +279,50 @@ const UsersPage = () => {
                 />
               </div>
               <div className="col">
-                <label className="small muted" style={{ display: "block", marginBottom: "6px" }}>
+                <label
+                  className="small muted"
+                  style={{ display: "block", marginBottom: "6px" }}
+                >
                   Technician Level
                 </label>
-                <select
-                  style={{ width: "100%" }}
+                <DarkSelect
                   value={form.technicianLevel}
-                  onChange={(e) => {
-                    const code = e.target.value;
+                  onChange={(code) =>
                     setForm((f) => ({
                       ...f,
                       technicianLevel: code,
-                      technicianLevelDisplay: code ? TECHNICIAN_LEVELS[code] : "",
-                    }));
-                  }}
-                >
-                  <option value="">-</option>
-                  {Object.entries(TECHNICIAN_LEVELS).map(([code, display]) => (
-                    <option key={code} value={code}>{display}</option>
-                  ))}
-                </select>
+                      technicianLevelDisplay: code
+                        ? TECHNICIAN_LEVELS[code]
+                        : "",
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "-" },
+                    ...Object.entries(TECHNICIAN_LEVELS).map(
+                      ([code, display]) => ({
+                        value: code,
+                        label: display,
+                      }),
+                    ),
+                  ]}
+                />
               </div>
             </div>
           )}
 
           <div className="row">
-            <div className="col" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+            <div
+              className="col"
+              style={{ display: "flex", alignItems: "center", gap: "8px" }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={form.isActive}
@@ -300,7 +334,14 @@ const UsersPage = () => {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              justifyContent: "flex-end",
+              marginTop: "8px",
+            }}
+          >
             <button type="button" onClick={startNew} className="btn btn-ghost">
               Clear
             </button>
@@ -363,9 +404,13 @@ const UsersPage = () => {
                   </td>
                   <td>
                     {u.isActive ? (
-                      <span style={{ color: "#4ade80", fontSize: "12px" }}>● Active</span>
+                      <span style={{ color: "#4ade80", fontSize: "12px" }}>
+                        ● Active
+                      </span>
                     ) : (
-                      <span style={{ color: "#f87171", fontSize: "12px" }}>● Inactive</span>
+                      <span style={{ color: "#f87171", fontSize: "12px" }}>
+                        ● Inactive
+                      </span>
                     )}
                   </td>
                   <td className="small muted">
@@ -375,7 +420,11 @@ const UsersPage = () => {
                     <button
                       onClick={() => startEdit(u)}
                       className="btn btn-ghost"
-                      style={{ marginRight: "6px", fontSize: "12px", padding: "6px 12px" }}
+                      style={{
+                        marginRight: "6px",
+                        fontSize: "12px",
+                        padding: "6px 12px",
+                      }}
                     >
                       Edit
                     </button>
@@ -386,12 +435,24 @@ const UsersPage = () => {
                         fontSize: "12px",
                         padding: "6px 12px",
                         color: "#f87171",
-                        opacity: u.roleCode === ROLE_CODES.ADMIN && adminUsers.length <= 1 ? 0.5 : 1,
-                        cursor: u.roleCode === ROLE_CODES.ADMIN && adminUsers.length <= 1 ? "not-allowed" : "pointer",
+                        opacity:
+                          u.roleCode === ROLE_CODES.ADMIN &&
+                          adminUsers.length <= 1
+                            ? 0.5
+                            : 1,
+                        cursor:
+                          u.roleCode === ROLE_CODES.ADMIN &&
+                          adminUsers.length <= 1
+                            ? "not-allowed"
+                            : "pointer",
                       }}
-                      disabled={u.roleCode === ROLE_CODES.ADMIN && adminUsers.length <= 1}
+                      disabled={
+                        u.roleCode === ROLE_CODES.ADMIN &&
+                        adminUsers.length <= 1
+                      }
                       title={
-                        u.roleCode === ROLE_CODES.ADMIN && adminUsers.length <= 1
+                        u.roleCode === ROLE_CODES.ADMIN &&
+                        adminUsers.length <= 1
                           ? "Cannot delete the last admin"
                           : "Delete user"
                       }
@@ -403,7 +464,14 @@ const UsersPage = () => {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
+                  <td
+                    colSpan={7}
+                    style={{
+                      textAlign: "center",
+                      padding: "32px",
+                      color: "var(--muted)",
+                    }}
+                  >
                     No users yet.
                   </td>
                 </tr>

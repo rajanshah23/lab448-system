@@ -78,6 +78,9 @@ const RepairWorkspacePage = () => {
     try {
       await api.post(`/repairs/${id}/transition`, { newStatus });
       await load();
+      if (newStatus === REPAIR_STATUS.REPAIRED) {
+        navigate(`/repairs/${id}/billing`);
+      }
     } catch (err) {
       setStatusError(err.response?.data?.message || "Failed to change status");
     }

@@ -189,4 +189,10 @@ const AdminDashboard = () => {
   );
 };
 
+
+
+// // for checking  if the ui is working or not, we will show this message. once the ui is ready, we will remove this message and show the actual dashboard.
+// const AdminDashboard = () => {
+//   return  <div>Admin Dashboard is under maintenance.</div>;
+// };
 export default AdminDashboard;

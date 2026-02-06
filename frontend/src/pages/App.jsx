@@ -8,7 +8,7 @@ import DashboardPage from "./DashboardPage.jsx";
 import IntakePage from "./IntakePage.jsx";
 import QueuePage from "./QueuePage.jsx";
 import QrScanPage from "./QrScanPage.jsx";
-import InventoryPage from "./InventoryPage.jsx";
+import InventoryPage from "./InventoryPage.jsx"; 
 import RepairWorkspacePage from "./RepairWorkspacePage.jsx";
 import BillingPage from "./BillingPage.jsx";
 import UsersPage from "./UsersPage.jsx";
@@ -20,17 +20,24 @@ import LogisticsDashboard from "./dashboards/LogisticsDashboard.jsx";
 import FinanceDashboard from "./dashboards/FinanceDashboard.jsx";
 import ManagerDashboard from "./dashboards/ManagerDashboard.jsx";
 import AdminDashboard from "./dashboards/AdminDashboard.jsx";
+import BillingPaymentsDashboard from "./dashboards/BillingPaymentsDashboard.jsx";
 import { PERMISSIONS, ROLE_CODES } from "../constants/permissions.js";
 
 const DashboardRedirect = () => {
   const { user } = useAuth();
   const code = user?.roleCode;
-  if (code === ROLE_CODES.ADMIN) return <Navigate to="/dashboard/admin" replace />;
-  if (code === ROLE_CODES.TECHNICIAN) return <Navigate to="/dashboard/technician" replace />;
-  if (code === ROLE_CODES.FRONT_DESK) return <Navigate to="/dashboard/front-desk" replace />;
-  if (code === ROLE_CODES.LOGISTICS) return <Navigate to="/dashboard/logistics" replace />;
-  if (code === ROLE_CODES.FINANCE) return <Navigate to="/dashboard/finance" replace />;
-  if (code === ROLE_CODES.MANAGER) return <Navigate to="/dashboard/manager" replace />;
+  if (code === ROLE_CODES.ADMIN)
+    return <Navigate to="/dashboard/admin" replace />;
+  if (code === ROLE_CODES.TECHNICIAN)
+    return <Navigate to="/dashboard/technician" replace />;
+  if (code === ROLE_CODES.FRONT_DESK)
+    return <Navigate to="/dashboard/front-desk" replace />;
+  if (code === ROLE_CODES.LOGISTICS)
+    return <Navigate to="/dashboard/logistics" replace />;
+  if (code === ROLE_CODES.FINANCE)
+    return <Navigate to="/dashboard/finance" replace />;
+  if (code === ROLE_CODES.MANAGER)
+    return <Navigate to="/dashboard/manager" replace />;
   return <DashboardPage />;
 };
 
@@ -46,7 +53,13 @@ const App = () => {
       <Route
         path="/"
         element={
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.ADMIN_WILDCARD]} requireAll={false}>
+          <ProtectedRoute
+            requiredPermissions={[
+              PERMISSIONS.VIEW_DASHBOARD,
+              PERMISSIONS.ADMIN_WILDCARD,
+            ]}
+            requireAll={false}
+          >
             <Layout>
               <DashboardRedirect />
             </Layout>
@@ -56,7 +69,9 @@ const App = () => {
       <Route
         path="/dashboard/technician"
         element={
-          <ProtectedRoute requiredRoles={[ROLE_CODES.TECHNICIAN, ROLE_CODES.ADMIN]}>
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.TECHNICIAN, ROLE_CODES.ADMIN]}
+          >
             <Layout>
               <TechnicianDashboard />
             </Layout>
@@ -66,7 +81,9 @@ const App = () => {
       <Route
         path="/dashboard/front-desk"
         element={
-          <ProtectedRoute requiredRoles={[ROLE_CODES.FRONT_DESK, ROLE_CODES.ADMIN]}>
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.FRONT_DESK, ROLE_CODES.ADMIN]}
+          >
             <Layout>
               <FrontDeskDashboard />
             </Layout>
@@ -76,7 +93,9 @@ const App = () => {
       <Route
         path="/dashboard/logistics"
         element={
-          <ProtectedRoute requiredRoles={[ROLE_CODES.LOGISTICS, ROLE_CODES.ADMIN]}>
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.LOGISTICS, ROLE_CODES.ADMIN]}
+          >
             <Layout>
               <LogisticsDashboard />
             </Layout>
@@ -86,7 +105,9 @@ const App = () => {
       <Route
         path="/dashboard/finance"
         element={
-          <ProtectedRoute requiredRoles={[ROLE_CODES.FINANCE, ROLE_CODES.ADMIN]}>
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.FINANCE, ROLE_CODES.ADMIN]}
+          >
             <Layout>
               <FinanceDashboard />
             </Layout>
@@ -96,7 +117,9 @@ const App = () => {
       <Route
         path="/dashboard/manager"
         element={
-          <ProtectedRoute requiredRoles={[ROLE_CODES.MANAGER, ROLE_CODES.ADMIN]}>
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.MANAGER, ROLE_CODES.ADMIN]}
+          >
             <Layout>
               <ManagerDashboard />
             </Layout>
@@ -114,6 +137,20 @@ const App = () => {
         }
       />
       <Route
+        path="/dashboard/billing-payments"
+        element={
+          <ProtectedRoute
+            requiredRoles={[ROLE_CODES.FINANCE, ROLE_CODES.ADMIN]}
+          >
+            <Layout>
+              <BillingPaymentsDashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+     
+
+      <Route
         path="/intake"
         element={
           <ProtectedRoute requiredPermissions={[PERMISSIONS.INTAKE_REPAIR]}>
@@ -126,7 +163,9 @@ const App = () => {
       <Route
         path="/queue"
         element={
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.UPDATE_REPAIR_STATUS]}>
+          <ProtectedRoute
+            requiredPermissions={[PERMISSIONS.UPDATE_REPAIR_STATUS]}
+          >
             <Layout>
               <QueuePage />
             </Layout>
@@ -173,7 +212,10 @@ const App = () => {
         path="/customers"
         element={
           <ProtectedRoute
-            requiredPermissions={[PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.INTAKE_REPAIR]}
+            requiredPermissions={[
+              PERMISSIONS.VIEW_DASHBOARD,
+              PERMISSIONS.INTAKE_REPAIR,
+            ]}
             requireAll={false}
           >
             <Layout>
@@ -186,7 +228,10 @@ const App = () => {
         path="/customers/:id"
         element={
           <ProtectedRoute
-            requiredPermissions={[PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.INTAKE_REPAIR]}
+            requiredPermissions={[
+              PERMISSIONS.VIEW_DASHBOARD,
+              PERMISSIONS.INTAKE_REPAIR,
+            ]}
             requireAll={false}
           >
             <Layout>
@@ -233,4 +278,3 @@ const App = () => {
 };
 
 export default App;
-
