@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lab448_secret}
       POSTGRES_DB: ${POSTGRES_DB:-lab448_repair}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Named volume backed by host folder: data in ./data/postgres (or POSTGRES_DATA_DIR); survives compose down
+      - lab448_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab448} -d ${POSTGRES_DB:-lab448_repair}"]
       interval: 5s
@@ -33,4 +34,10 @@ services:
         condition: service_healthy
 
 volumes:
-  postgres_data:
+  lab448_postgres_data:
+    name: lab448_postgres_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_DIR:-./data/postgres}   # external folder on host (repo or e.g. /home/user/lab448-data/postgres)

@@ -63,6 +63,8 @@ This will:
 - Build and start the **backend** (Node/Express + built frontend) in another container, connected to that database.
 - Expose the app on your machine at port `HTTP_PORT` (default **8080**).
 
+**Database data persistence:** The database uses a Docker **named volume** (`lab448_postgres_data`). The Docker’s volume is backed by an external folder on the host (default `./data/postgres`; override with `POSTGRES_DATA_DIR` in root `.env`). Create that directory if needed. The `data/` directory is in `.gitignore`. When you run `docker compose down`, the containers are removed but the volume (and your data) stays. To remove the database as well, run `docker compose down -v`.
+
 ### 2.3 First-time database setup
 
 After the stack is up, run the DB sync and seeds **once**:

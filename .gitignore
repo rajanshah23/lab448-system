@@ -47,6 +47,9 @@ cache/
 *.db
 *.sqlite3
 
+# Docker bind-mounted DB data (host filesystem, do not commit)
+data/
+
 # OS files
 .DS_Store
 Thumbs.db
