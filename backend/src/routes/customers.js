@@ -12,6 +12,8 @@ router.use(authenticate);
 const authorizeAny = (perms) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
   const userPerms = req.user.permissions || [];
+  // Allow wildcard admin permission
+  if (userPerms.includes("*:*")) return next();
   if (!perms.some((p) => userPerms.includes(p)))
     return res.status(403).json({ message: "Forbidden" });
   next();

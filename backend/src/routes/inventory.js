@@ -160,6 +160,22 @@ router.get("/", authorize([PERMISSIONS.MANAGE_INVENTORY]), async (req, res) => {
   }
 });
 
+// Return active SKUs for use in technician workflows (readable by users with repair view)
+router.get("/skus", authorize([PERMISSIONS.REPAIR_VIEW]), async (req, res) => {
+  try {
+    const items = await db.Inventory.findAll({
+      where: { isActive: true },
+      attributes: ["sku", "name", "quantity", "unitPrice"],
+      order: [["sku", "ASC"]],
+    });
+    const skus = (items || []).map((i) => ({ sku: i.sku, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice })).filter(x => x.sku);
+    res.json(skus);
+  } catch (err) {
+    console.error("Inventory skus error", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 router.post(
   "/",
   authorize([PERMISSIONS.MANAGE_INVENTORY]),

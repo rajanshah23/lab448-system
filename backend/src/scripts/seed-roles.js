@@ -23,7 +23,7 @@ const ROLES = [
   {
     id: "role_fd",
     code: "FRONT_DESK",
-    name: "Command Desk",
+    name: "Front Desk",
     description: "Customer intake, job creation, coordination",
     permissions: [
       "customer:create",
@@ -31,6 +31,9 @@ const ROLES = [
       "repair:create",
       "repair:intake",
       "repair:view_all",
+      "repair:view",
+      "repair:update_status",
+      "repair:billing",
       "payment:receive",
       "repair:payment",
       "view:dashboard",

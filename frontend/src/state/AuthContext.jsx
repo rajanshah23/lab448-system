@@ -43,6 +43,21 @@ export const AuthProvider = ({ children }) => {
     delete api.defaults.headers.common.Authorization;
   };
 
+  const refreshUser = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/auth/me");
+      setUser(res.data);
+      localStorage.setItem("authUser", JSON.stringify(res.data));
+      return res.data;
+    } catch (err) {
+      console.error("Refresh user failed", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isAdmin = () =>
     user?.roleCode === "ADMIN" ||
     user?.permissions?.includes("*:*") ||
@@ -71,6 +86,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        refreshUser,
         hasPermission,
         hasRole,
         isAdmin,

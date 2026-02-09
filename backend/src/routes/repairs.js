@@ -7,7 +7,7 @@ import {
   REPAIR_STATUS,
 } from "../config.js";
 import { getFrontdeskCharge } from "../chargesConfig.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize,checkPermission } from "../middleware/auth.js";
 import { logAudit } from "../middleware/audit.js";
 
 const router = express.Router();
@@ -53,6 +53,90 @@ const recalcRepairTotals = async (repairId, transaction = null) => {
 };
 
 router.use(authenticate);
+
+// Search repairs that have inventory usage for the given SKU
+router.get(
+  "/by-sku",
+  authorize([PERMISSIONS.REPAIR_VIEW]),
+  async (req, res) => {
+    const sku = (req.query.sku || "").toString().trim();
+    if (!sku) return res.status(400).json({ message: "sku query parameter is required" });
+    try {
+      const inventory = await db.Inventory.findOne({ where: { sku } });
+      if (!inventory) return res.status(404).json({ message: "Inventory not found" });
+
+      const usages = await db.InventoryUsage.findAll({
+        where: { inventoryId: inventory.id },
+        include: [
+          {
+            model: db.Repair,
+            as: "repair",
+            include: [
+              { model: db.Customer, as: "customer" },
+              { model: db.Device, as: "device" },
+            ],
+          },
+        ],
+      });
+
+      const repairs = usages
+        .map((u) => u.repair)
+        .filter((r) => !!r)
+        .map((r) => ({
+          id: r.id,
+          status: r.status,
+          createdAt: r.createdAt,
+          qrToken: r.qrToken,
+          customer: r.customer,
+          device: r.device,
+        }));
+
+      res.json(repairs);
+    } catch (err) {
+      console.error("Repairs by SKU error", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
+// Return SKU list for visible repairs in queue (grouped by repair) so technicians can copy barcodes
+router.get(
+  "/queue-skus",
+  authorize([PERMISSIONS.REPAIR_VIEW]),
+  async (req, res) => {
+    try {
+      const statusParam = (req.query.status || "").toString().trim();
+      const statuses = statusParam ? statusParam.split(",").map(s => s.trim()).filter(Boolean) : null;
+
+      const where = {};
+      if (statuses && statuses.length) where.status = { [Op.in]: statuses };
+
+      const repairs = await db.Repair.findAll({
+        where,
+        include: [
+          { model: db.InventoryUsage, as: "inventoryUsage", include: [{ model: db.Inventory, as: "inventory" }] },
+          { model: db.Customer, as: "customer" },
+          { model: db.Device, as: "device" },
+        ],
+        order: [["createdAt", "ASC"]],
+      });
+
+      const result = repairs.map(r => ({
+        repairId: r.id,
+        qrToken: r.qrToken,
+        status: r.status,
+        createdAt: r.createdAt,
+        skus: (r.inventoryUsage || []).map(u => ({ sku: u.inventory?.sku || null, name: u.inventory?.name || null }))
+          .filter(x => x.sku),
+      }));
+
+      res.json(result);
+    } catch (err) {
+      console.error("Queue SKUs error", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
 
 // Intake a new repair (customer + device + repair)
 router.post(
@@ -135,9 +219,9 @@ router.post(
         );
 
         if (flatChargeAmount > 0) {
-          const desc = categoryRecord
-            ? `Flat rate: ${categoryRecord.name}`
-            : "Intake flat charge";
+          // Use the Service Ticket Charge description for intake flat charges so the ticket fee
+          // is shown consistently in the billing UI (frontend will treat this as the ticket charge)
+          const desc = "Service Ticket Charge";
           await db.RepairCharge.create(
             {
               repairId: repair.id,
@@ -581,7 +665,7 @@ router.get(
 // Lookup repair by QR token
 router.get(
   "/by-qr/:token",
-  authorize([PERMISSIONS.UPDATE_REPAIR_STATUS, PERMISSIONS.MANAGE_BILLING]),
+  checkPermission([PERMISSIONS.UPDATE_REPAIR_STATUS, PERMISSIONS.MANAGE_BILLING]),
   async (req, res) => {
     const { token } = req.params;
     try {

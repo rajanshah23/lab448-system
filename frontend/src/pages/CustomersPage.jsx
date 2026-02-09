@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../state/AuthContext.jsx";
 import { api } from "../utils/apiClient.js";
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -11,7 +12,10 @@ const CustomersPage = () => {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [retrying, setRetrying] = useState(false);
   const navigate = useNavigate();
+
+  const { refreshUser } = useAuth();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -22,12 +26,30 @@ const CustomersPage = () => {
       });
       setCustomers(res.data);
     } catch (err) {
+
+      if (err.response?.status === 403 && refreshUser) {
+        setRetrying(true);
+        try {
+          await refreshUser();
+          const res = await api.get("/customers", {
+            params: { q: searchQ || undefined, limit: DEFAULT_LIMIT },
+          });
+          setCustomers(res.data);
+          setError("");
+          setRetrying(false);
+          return;
+        } catch (err2) {
+          setRetrying(false);
+
+        }
+      }
+
       setError(err.response?.data?.message || "Failed to load customers");
       setCustomers([]);
     } finally {
       setLoading(false);
     }
-  }, [searchQ]);
+  }, [searchQ, refreshUser]);
 
   useEffect(() => {
     const t = setTimeout(() => setSearchQ(searchInput.trim()), SEARCH_DEBOUNCE_MS);
@@ -49,7 +71,23 @@ const CustomersPage = () => {
         </p>
       </div>
 
-      {error && (
+      {retrying ? (
+        <div
+          style={{
+            padding: "12px 16px",
+            background: "rgba(96,165,250,0.06)",
+            border: "1px solid rgba(96,165,250,0.12)",
+            borderRadius: "10px",
+            color: "#60a5fa",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <div style={{ flex: 1 }}>Refreshing permissions…</div>
+        </div>
+      ) : error ? (
         <div
           style={{
             padding: "12px 16px",
@@ -58,11 +96,46 @@ const CustomersPage = () => {
             borderRadius: "10px",
             color: "#f87171",
             fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
           }}
         >
-          ✗ {error}
+          <div style={{ flex: 1 }}>✗ {error}</div>
+          {String(error).toLowerCase().includes("forbidden") && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={async () => {
+                  setRetrying(true);
+                  setError("");
+                  try {
+                    await refreshUser();
+                    await load();
+                  } catch (err) {
+                    setError("Failed to refresh permissions — please sign out and sign in again");
+                  } finally {
+                    setRetrying(false);
+                  }
+                }}
+              >
+                Refresh permissions
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+
+                  setError("Permission missing: grant 'view:dashboard' to your role or re-login");
+                }}
+              >
+                Help
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
 
       <div
         style={{
