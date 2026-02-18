@@ -10,7 +10,6 @@ const LOW_STOCK_THRESHOLD = 5;
 
 router.use(authenticate);
 
-
 // Helper: technician or admin
 const techOrAdmin = requireRole(["TECHNICIAN", "ADMIN"]);
 const fdOrAdmin = requireRole(["FRONT_DESK", "ADMIN"]);
@@ -26,75 +25,204 @@ router.get("/technician", techOrAdmin, async (req, res) => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const myRepairs = await db.Repair.findAll({
+    console.log(`Technician dashboard requested for user ID: ${userId}`);
+
+    // ========== FIXED: Get repairs assigned to this technician ==========
+    const assignedRepairs = await db.Repair.findAll({
       where: { assignedToUserId: userId },
       include: [
-        { model: db.Customer, as: "customer", attributes: ["id", "name", "phone"] },
-        { model: db.Device, as: "device", attributes: ["id", "brand", "model", "description"] },
+        {
+          model: db.Customer,
+          as: "customer",
+          attributes: ["id", "name", "phone"],
+        },
+        {
+          model: db.Device,
+          as: "device",
+          attributes: ["id", "brand", "model", "description"],
+        },
       ],
       order: [["updatedAt", "DESC"]],
     });
 
+    console.log(`Found ${assignedRepairs.length} assigned repairs`);
+
+    // ========== FIXED: Get repairs where technician used inventory using correct column name ==========
+    let inventoryRepairs = [];
+    try {
+      // Find all inventory usage records created by this technician
+      const usageRecords = await db.InventoryUsage.findAll({
+        where: { createdByUserId: userId },
+        include: [
+          {
+            model: db.Repair,
+            as: "repair",
+            include: [
+              {
+                model: db.Customer,
+                as: "customer",
+                attributes: ["id", "name", "phone"],
+              },
+              {
+                model: db.Device,
+                as: "device",
+                attributes: ["id", "brand", "model", "description"],
+              },
+            ],
+          },
+        ],
+      });
+
+      // Extract unique repairs from usage records
+      const repairMap = new Map();
+      usageRecords.forEach((usage) => {
+        if (usage.repair) {
+          repairMap.set(usage.repair.id, usage.repair);
+        }
+      });
+
+      inventoryRepairs = Array.from(repairMap.values());
+      console.log(
+        `Found ${inventoryRepairs.length} repairs with inventory usage by this technician`,
+      );
+    } catch (err) {
+      console.log("Error fetching inventory repairs:", err.message);
+    }
+
+    // Combine assigned and inventory repairs (remove duplicates)
+    const allRepairsMap = new Map();
+    [...assignedRepairs, ...inventoryRepairs].forEach((repair) => {
+      if (repair && repair.id) {
+        allRepairsMap.set(repair.id, repair);
+      }
+    });
+    const myRepairs = Array.from(allRepairsMap.values());
+
+    console.log(`Total unique repairs found: ${myRepairs.length}`);
+
+    // Log each repair found for debugging
+    myRepairs.forEach((repair) => {
+      console.log(
+        `Repair: ${repair.id}, Status: ${repair.status}, Assigned: ${repair.assignedToUserId}`,
+      );
+    });
+    // ========== END FIXED ==========
+
     const inProgress = myRepairs.filter((r) =>
-      ["TO_REPAIR", "IN_REPAIR"].includes(r.status)
+      ["TO_REPAIR", "IN_REPAIR"].includes(r.status),
     );
-    const completedThisMonth = await db.Repair.count({
-      where: {
-        assignedToUserId: userId,
-        status: { [Op.in]: ["REPAIRED", "UNREPAIRABLE", "DELIVERED"] },
-        completedAt: { [Op.gte]: monthStart },
-      },
+
+    // Calculate completed repairs for this month
+    const completedThisMonth = myRepairs.filter((r) => {
+      const isCompleted = ["REPAIRED", "UNREPAIRABLE", "DELIVERED"].includes(
+        r.status,
+      );
+      if (!isCompleted) return false;
+
+      const completionDate = r.completedAt || r.updatedAt;
+      return completionDate && new Date(completionDate) >= monthStart;
+    }).length;
+
+    // Calculate success rate
+    const monthCompletedRepairs = myRepairs.filter((r) => {
+      const isCompleted = ["REPAIRED", "UNREPAIRABLE"].includes(r.status);
+      if (!isCompleted) return false;
+
+      const completionDate = r.completedAt || r.updatedAt;
+      return completionDate && new Date(completionDate) >= monthStart;
     });
 
-    const completedRepairs = await db.Repair.findAll({
-      where: {
-        assignedToUserId: userId,
-        status: { [Op.in]: ["REPAIRED", "UNREPAIRABLE", "DELIVERED"] },
-        completedAt: { [Op.gte]: monthStart },
-        isLocked: true,
-      },
-      attributes: ["id", "staffShareAmount", "completedAt", "inRepairAt"],
+    const totalMonthCompleted = monthCompletedRepairs.length;
+    const monthRepairedCount = monthCompletedRepairs.filter(
+      (r) => r.status === "REPAIRED",
+    ).length;
+    const successRate =
+      totalMonthCompleted > 0
+        ? (monthRepairedCount / totalMonthCompleted) * 100
+        : 0;
+
+    // Get completed repairs with timestamps for earnings
+    const completedRepairs = myRepairs.filter((r) => {
+      const isCompleted = ["REPAIRED", "UNREPAIRABLE", "DELIVERED"].includes(
+        r.status,
+      );
+      if (!isCompleted) return false;
+
+      const completionDate = r.completedAt || r.updatedAt;
+      return (
+        completionDate && new Date(completionDate) >= monthStart && r.isLocked
+      );
     });
 
     const totalEarnings = completedRepairs.reduce(
       (sum, r) => sum + Number(r.staffShareAmount || 0),
-      0
+      0,
     );
 
     let avgCompletionHours = 0;
     const withTimes = completedRepairs.filter(
-      (r) => r.inRepairAt && r.completedAt
+      (r) => r.inRepairAt && (r.completedAt || r.updatedAt),
     );
     if (withTimes.length > 0) {
       const totalHours = withTimes.reduce((sum, r) => {
-        const h = (new Date(r.completedAt) - new Date(r.inRepairAt)) / (1000 * 60 * 60);
+        const endDate = r.completedAt || r.updatedAt;
+        const h =
+          (new Date(endDate) - new Date(r.inRepairAt)) / (1000 * 60 * 60);
         return sum + h;
       }, 0);
-      avgCompletionHours = Math.round(totalHours / withTimes.length * 10) / 10;
+      avgCompletionHours =
+        Math.round((totalHours / withTimes.length) * 10) / 10;
     }
 
+    // Performance trend
     const sixMonthsAgo = new Date(now);
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const trendData = await db.Repair.findAll({
-      where: {
-        assignedToUserId: userId,
-        completedAt: { [Op.gte]: sixMonthsAgo },
-        status: { [Op.in]: ["REPAIRED", "UNREPAIRABLE", "DELIVERED"] },
-      },
-      attributes: ["completedAt"],
-      raw: true,
+
+    const trendRepairs = myRepairs.filter((r) => {
+      const isCompleted = ["REPAIRED", "UNREPAIRABLE", "DELIVERED"].includes(
+        r.status,
+      );
+      if (!isCompleted) return false;
+
+      const completionDate = r.completedAt || r.updatedAt;
+      return completionDate && new Date(completionDate) >= sixMonthsAgo;
     });
 
     const byMonth = {};
-    trendData.forEach((r) => {
-      const d = new Date(r.completedAt);
+    trendRepairs.forEach((r) => {
+      const completionDate = r.completedAt || r.updatedAt;
+      const d = new Date(completionDate);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       byMonth[key] = (byMonth[key] || 0) + 1;
     });
+
     const performanceTrend = Object.entries(byMonth)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, repairsCompleted: count }));
 
+    // Get pending repairs (unassigned)
+    const pendingRepairs = await db.Repair.findAll({
+      where: {
+        assignedToUserId: null,
+        status: { [Op.in]: ["INTAKE", "TO_REPAIR"] },
+      },
+      include: [
+        {
+          model: db.Customer,
+          as: "customer",
+          attributes: ["id", "name", "phone"],
+        },
+        {
+          model: db.Device,
+          as: "device",
+          attributes: ["id", "brand", "model", "description"],
+        },
+      ],
+      limit: 20,
+      order: [["createdAt", "ASC"]],
+    });
+
+     
     res.json({
       current_month_stats: {
         total_repairs_completed: completedThisMonth,
@@ -103,8 +231,11 @@ router.get("/technician", techOrAdmin, async (req, res) => {
         repairs_in_progress: inProgress.length,
       },
       my_active_repairs: inProgress.slice(0, 20),
+      pending_repairs: pendingRepairs,
       performance_trend: performanceTrend,
+      success_rate: Number(successRate.toFixed(1)),
     });
+    
   } catch (err) {
     console.error("Technician dashboard error", err);
     res.status(500).json({ message: "Internal server error" });
@@ -115,48 +246,80 @@ router.get("/technician", techOrAdmin, async (req, res) => {
 router.get("/front-desk", fdOrAdmin, async (req, res) => {
   try {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [newIntakesToday, allRepairs, monthPayments, recentRepairs, repairsWithPayments] =
-      await Promise.all([
-        db.Repair.count({
-          where: { intakeAt: { [Op.gte]: todayStart } },
-        }),
-        db.Repair.findAll({
-          where: { status: { [Op.ne]: "DELIVERED" } },
-          include: [
-            { model: db.Customer, as: "customer", attributes: ["id", "name", "phone"] },
-            { model: db.Device, as: "device", attributes: ["id", "brand", "model"] },
-            { model: db.Payment, as: "payments" },
-          ],
-        }),
-        db.Payment.sum("amount", {
-          where: { receivedAt: { [Op.gte]: monthStart } },
-        }),
-        db.Repair.findAll({
-          include: [
-            { model: db.Customer, as: "customer", attributes: ["id", "name", "phone"] },
-            { model: db.Device, as: "device", attributes: ["id", "brand", "model"] },
-          ],
-          order: [["createdAt", "DESC"]],
-          limit: 20,
-        }),
-        db.Repair.findAll({
-          include: [
-            { model: db.Customer, as: "customer", attributes: ["id", "name", "phone"] },
-            { model: db.Device, as: "device", attributes: ["id", "brand", "model"] },
-            { model: db.Payment, as: "payments" },
-          ],
-        }),
-      ]);
+    const [
+      newIntakesToday,
+      allRepairs,
+      monthPayments,
+      recentRepairs,
+      repairsWithPayments,
+    ] = await Promise.all([
+      db.Repair.count({
+        where: { intakeAt: { [Op.gte]: todayStart } },
+      }),
+      db.Repair.findAll({
+        where: { status: { [Op.ne]: "DELIVERED" } },
+        include: [
+          {
+            model: db.Customer,
+            as: "customer",
+            attributes: ["id", "name", "phone"],
+          },
+          {
+            model: db.Device,
+            as: "device",
+            attributes: ["id", "brand", "model"],
+          },
+          { model: db.Payment, as: "payments" },
+        ],
+      }),
+      db.Payment.sum("amount", {
+        where: { receivedAt: { [Op.gte]: monthStart } },
+      }),
+      db.Repair.findAll({
+        include: [
+          {
+            model: db.Customer,
+            as: "customer",
+            attributes: ["id", "name", "phone"],
+          },
+          {
+            model: db.Device,
+            as: "device",
+            attributes: ["id", "brand", "model"],
+          },
+        ],
+        order: [["createdAt", "DESC"]],
+        limit: 20,
+      }),
+      db.Repair.findAll({
+        include: [
+          {
+            model: db.Customer,
+            as: "customer",
+            attributes: ["id", "name", "phone"],
+          },
+          {
+            model: db.Device,
+            as: "device",
+            attributes: ["id", "brand", "model"],
+          },
+          { model: db.Payment, as: "payments" },
+        ],
+      }),
+    ]);
 
     const pendingDeliveries = allRepairs.filter((r) =>
-      ["REPAIRED", "UNREPAIRABLE"].includes(r.status)
+      ["REPAIRED", "UNREPAIRABLE"].includes(r.status),
     );
-    const totalCustomersServed = new Set(
-      allRepairs.map((r) => r.customerId)
-    ).size;
+    const totalCustomersServed = new Set(allRepairs.map((r) => r.customerId))
+      .size;
 
     const pendingPayments = repairsWithPayments
       .filter((r) => !r.isLocked)
@@ -203,7 +366,13 @@ router.get("/logistics", logOrAdmin, async (req, res) => {
         where: { createdAt: { [Op.gte]: thirtyDaysAgo } },
         include: [
           { model: db.Inventory, as: "inventory" },
-          { model: db.Repair, as: "repair", include: [{ model: db.Customer, as: "customer", attributes: ["name"] }] },
+          {
+            model: db.Repair,
+            as: "repair",
+            include: [
+              { model: db.Customer, as: "customer", attributes: ["name"] },
+            ],
+          },
         ],
         order: [["createdAt", "DESC"]],
         limit: 30,
@@ -229,7 +398,7 @@ router.get("/logistics", logOrAdmin, async (req, res) => {
 
     const totalValue = items.reduce(
       (s, i) => s + Number(i.quantity) * Number(i.unitPrice),
-      0
+      0,
     );
     const lowStockItems = items.filter((i) => i.quantity < LOW_STOCK_THRESHOLD);
 
@@ -252,7 +421,11 @@ router.get("/logistics", logOrAdmin, async (req, res) => {
 router.get("/finance", finOrAdmin, async (req, res) => {
   try {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const [todayPayments, monthPayments, allPayments, repairsWithPayments] =
@@ -265,15 +438,29 @@ router.get("/finance", finOrAdmin, async (req, res) => {
         }),
         db.Payment.findAll({
           include: [
-            { model: db.Repair, as: "repair", include: [{ model: db.Customer, as: "customer", attributes: ["name"] }] },
+            {
+              model: db.Repair,
+              as: "repair",
+              include: [
+                { model: db.Customer, as: "customer", attributes: ["name"] },
+              ],
+            },
           ],
           order: [["receivedAt", "DESC"]],
           limit: 50,
         }),
         db.Repair.findAll({
           include: [
-            { model: db.Customer, as: "customer", attributes: ["id", "name", "phone"] },
-            { model: db.Device, as: "device", attributes: ["id", "brand", "model"] },
+            {
+              model: db.Customer,
+              as: "customer",
+              attributes: ["id", "name", "phone"],
+            },
+            {
+              model: db.Device,
+              as: "device",
+              attributes: ["id", "brand", "model"],
+            },
             { model: db.Payment, as: "payments" },
           ],
         }),
@@ -281,7 +468,8 @@ router.get("/finance", finOrAdmin, async (req, res) => {
 
     const methodBreakdown = { CASH: 0, CARD: 0, BANK_TRANSFER: 0, OTHER: 0 };
     monthPayments.forEach((p) => {
-      methodBreakdown[p.method] = (methodBreakdown[p.method] || 0) + Number(p.amount);
+      methodBreakdown[p.method] =
+        (methodBreakdown[p.method] || 0) + Number(p.amount);
     });
 
     const pendingBills = repairsWithPayments
@@ -296,7 +484,7 @@ router.get("/finance", finOrAdmin, async (req, res) => {
     const outstandingPayments = pendingBills.reduce((s, r) => s + r.due, 0);
     const totalRevenue = (monthPayments || []).reduce(
       (s, p) => s + Number(p.amount),
-      0
+      0,
     );
 
     res.json({
@@ -359,7 +547,7 @@ router.get("/manager", mgrOrAdmin, async (req, res) => {
     const staffUtilization = technicians.map((t) => {
       const assigned = repairs.filter((r) => r.assignedToUserId === t.id);
       const inProgress = assigned.filter((r) =>
-        ["TO_REPAIR", "IN_REPAIR"].includes(r.status)
+        ["TO_REPAIR", "IN_REPAIR"].includes(r.status),
       );
       return {
         technicianId: t.id,
@@ -371,7 +559,9 @@ router.get("/manager", mgrOrAdmin, async (req, res) => {
 
     const bottlenecks = repairs.filter((r) => {
       const updated = r.updatedAt || r.createdAt;
-      return new Date(updated) < fortyEightHoursAgo && !["INTAKE"].includes(r.status);
+      return (
+        new Date(updated) < fortyEightHoursAgo && !["INTAKE"].includes(r.status)
+      );
     });
 
     res.json({
@@ -430,14 +620,18 @@ router.get("/admin", adminOnly, async (req, res) => {
   }
 });
 
-// Legacy summary (keep for backward compatibility)
+// GET /api/dashboard/summary
 router.get(
   "/summary",
   checkPermission(["view:dashboard", "*:*"]),
   async (req, res) => {
     try {
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
       const [
         totalRepairs,
         openRepairs,
@@ -470,7 +664,7 @@ router.get(
       console.error("Dashboard error", err);
       res.status(500).json({ message: "Internal server error" });
     }
-  }
+  },
 );
 
 export default router;

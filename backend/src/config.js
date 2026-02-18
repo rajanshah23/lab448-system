@@ -15,6 +15,7 @@ export const REPAIR_STATUS = {
   DELIVERED: "DELIVERED",
 };
 
+//  Added missing transitions
 export const ALLOWED_STATUS_TRANSITIONS = {
   INTAKE: ["TO_REPAIR"],
   // Allow reverting back to INTAKE from TO_REPAIR to support manual corrections
@@ -68,7 +69,7 @@ export const TECHNICIAN_LEVELS = {
   MASTER: { display: "Repair General" },
 };
 
-// ——— SMS (Aakash) ———  
+// ——— SMS (Aakash) ———
 // Placeholders: {{customerName}}, {{qrToken}}, {{date}}. Override via SMS_INTAKE_MESSAGE, SMS_REPAIRED_MESSAGE, SMS_UNREPAIRABLE_MESSAGE in .env
 export const SMS_MESSAGES = {
   INTAKE:
@@ -85,8 +86,10 @@ export const SMS_MESSAGES = {
 export function formatSmsMessage(template, data = {}) {
   let out = template;
   for (const [key, value] of Object.entries(data)) {
-    out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value != null ? String(value) : "");
+    out = out.replace(
+      new RegExp(`\\{\\{${key}\\}\\}`, "g"),
+      value != null ? String(value) : "",
+    );
   }
   return out;
 }
-

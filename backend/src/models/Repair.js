@@ -29,7 +29,7 @@ export default (sequelize) => {
           "IN_REPAIR",
           "REPAIRED",
           "UNREPAIRABLE",
-          "DELIVERED"
+          "DELIVERED",
         ),
         allowNull: false,
         defaultValue: "INTAKE",
@@ -108,7 +108,7 @@ export default (sequelize) => {
       tableName: "repairs",
       timestamps: true,
       underscored: true,
-    }
+    },
   );
 
   Repair.associate = (models) => {
